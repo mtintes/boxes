@@ -27,16 +27,19 @@ class LazySusan(Boxes):
         self.addSettingsArgs(edges.FingerJointSettings)
         self.addSettingsArgs(edges.FlexSettings)
 
-        self.buildArgParser(h=110)
+        self.buildArgParser(outside="FALSE",h=110,)
         self.argparser.add_argument(
             "--inside_radius", action="store", type=float, default=40,
-            help="inside radius of the lazy susan")
+            help="inside radius of the lazy susan.")
         self.argparser.add_argument(
             "--outside_radius", action="store", type=float, default=280,
             help="outside radius of the lazy susan")
         self.argparser.add_argument(
             "--angle", action="store", type=float, default=70,
-            help="angle of the lazy susan")
+            help="angle of the lazy susan. If outside is false it's the angle between the inside of the endcap wall")
+        self.argparser.add_argument(
+                "--handle", action="store", type=bool, default='False', 
+                help="Draw an indent on the wall to use ase handle")
         self.argparser.add_argument(
             "--top",  action="store", type=str, default="hole",
             choices=["hole", "lid", "closed",],
@@ -47,7 +50,7 @@ class LazySusan(Boxes):
             self.moveTo(inside_radius, 0)
             self.moveArc(90)
             self.polyline(0, (angle, inside_radius))
-        
+
         with self.saved_context():
             self.moveTo(outside_radius, 0)
             self.moveArc(90)
@@ -71,53 +74,61 @@ class LazySusan(Boxes):
             self.corner(90)
             self.edges[edges[3]](height)
 
-    def drawFlexWall(self, length, height):
+    def drawFlexWall(self, length, height,thickness):
         """Draw a wall with the given width, height, edges and label."""
         with self.saved_context():
             self.moveTo(0, 0)
-            self.edges["X"](length, h=height)
+            self.edges["e"](thickness)
+            self.edges["X"](length-2*thickness, h=height+thickness)
+            self.edges["e"](thickness)
             self.corner(90)
-            self.edges["f"](height, h=length)
+            self.edges["F"](height+thickness, h=length)
             self.corner(90)
-            self.edges["e"](length, h=height)
+            self.edges["e"](length)
             self.corner(90)
-            self.edges["f"](height, h=length)
-
+            self.edges["F"](height+thickness, h=length)
 
 
 
     def render(self):
-        angle, inside_radius, outside_radius, h = self.angle, self.inside_radius, self.outside_radius, self.h
+        if self.outside:
+            o=self.thickness
+            angle_diminution= 2*self.thickness/(self.inside_radius+self.thickness)*180/math.pi  
+        else:
+            o=0
+            angle_diminution=0
+        if self.outside and (self.top=='lid' or self.top=='close'):
+            top=self.thickness
+        else:
+            top=0
+##  The drawing of the file start here
+
+        angle, inside_radius, outside_radius, h = self.angle, self.inside_radius+o, self.outside_radius-o, self.h-top-o
         t = self.thickness
 
-        # angle = 30
-
         self.moveTo(0, 5)
-        self.drawfloor(angle, inside_radius, outside_radius)
+        self.drawfloor(angle-angle_diminution, inside_radius, outside_radius)
         self.moveTo(outside_radius+5, 0)
 
         # #flex wall for outside
-        outside_wall = angle * (math.pi / 180) * outside_radius
-        # self.rectangularWall(outside_wall, h, "eFeF", move="right",label="Outside Wall")
-        # # self.edges["X"](-outside_wall, h=h)
-        self.drawFlexWall(outside_wall, h+t)
-        # I think this will slide the outside wall down
-        
+        outside_wall = angle * (math.pi / 180) * outside_radius + 2*t-2*o
+        self.drawFlexWall(outside_wall, h,t)
+        if self.handle:
+            with self.saved_context():
+                self.moveTo(outside_wall/2-10,h+t+0.05)
+                self.curveTo(0,-15,20,-15,20,0)
+
+
+
+
         #flex wall for inside
         self.moveTo(outside_wall+10, 0)
-        inside_wall = angle * (math.pi / 180) * inside_radius
-        self.drawFlexWall(inside_wall, h+t)
-        # I think this will slide the outside wall down
-        # self.rectangularWall(inside_wall, h, "eFeF", move="right",label="Inside Wall")
-        
+        inside_wall = angle * (math.pi / 180) * (inside_radius-t) + 2*t-2*o
+        self.drawFlexWall(inside_wall, h,t)
+
         #solid endcap walls
         self.moveTo(inside_wall+10,0)
-        self.drawWall(outside_radius-inside_radius+2*t, h, "fFeF")
+        self.drawWall(outside_radius-inside_radius, h+t, "Ffef")
 
         self.moveTo(outside_radius-inside_radius+10, 0)
-        # self.flangedWall(outside_radius-inside_radius,h, "Ffef", move="up",label="end cap" )
-        self.drawWall(outside_radius-inside_radius+2*t, h, "fFeF")
-        # self.flangedWall(outside_radius-inside_radius,h, "Ffef", move="right",label="end cap")
-
-        # # self.edges["X"](50, h=50)
-       
+        self.drawWall(outside_radius-inside_radius, h+t, "Ffef")
